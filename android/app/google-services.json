@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "933905113120",
+    "project_id": "sobat-beres",
+    "storage_bucket": "sobat-beres.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:933905113120:android:f1c63dceb4b65c8d529c45",
+        "android_client_info": {
+          "package_name": "com.example.uaspemmob"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSQYhz2Uhi0I9Ye8UMeOijAZPVbF67ANk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
