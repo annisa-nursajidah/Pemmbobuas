@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../core/providers/user_provider.dart';
 import '../../models/order_model.dart';
 import '../../services/firebase_service.dart';
 
@@ -49,30 +51,35 @@ class _OrderScreenState extends State<OrderScreen>
         ),
       ),
       body: SafeArea(
-        child: StreamBuilder<List<OrderModel>>(
-          stream: _firebaseService.getOrdersStream('Ahmad'),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child: CircularProgressIndicator(
-                      color: AppColors.accentBlue));
-            }
+        child: Builder(
+          builder: (context) {
+            final userId = context.read<UserProvider>().userId;
+            return StreamBuilder<List<OrderModel>>(
+              stream: _firebaseService.getOrdersStream(userId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                      child: CircularProgressIndicator(
+                          color: AppColors.accentBlue));
+                }
 
-            final orders = snapshot.data ?? [];
+                final orders = snapshot.data ?? [];
 
-            return TabBarView(
-              controller: _tabController,
-              children: [
-                _buildOrderList(
-                    orders.where((o) => o.status == 'pending').toList(),
-                    'Belum ada pesanan aktif'),
-                _buildOrderList(
-                    orders.where((o) => o.status == 'selesai').toList(),
-                    'Belum ada pesanan selesai'),
-                _buildOrderList(
-                    orders.where((o) => o.status == 'batal').toList(),
-                    'Belum ada pesanan dibatalkan'),
-              ],
+                return TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildOrderList(
+                        orders.where((o) => o.status == 'pending').toList(),
+                        'Belum ada pesanan aktif'),
+                    _buildOrderList(
+                        orders.where((o) => o.status == 'selesai').toList(),
+                        'Belum ada pesanan selesai'),
+                    _buildOrderList(
+                        orders.where((o) => o.status == 'batal').toList(),
+                        'Belum ada pesanan dibatalkan'),
+                  ],
+                );
+              },
             );
           },
         ),

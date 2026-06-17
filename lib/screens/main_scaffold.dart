@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/constants/app_colors.dart';
-import '../core/constants/app_text_styles.dart';
 import 'home/home_screen.dart';
 import 'explore/explore_screen.dart';
 import 'order/order_screen.dart';

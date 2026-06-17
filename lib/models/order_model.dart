@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OrderModel {
   final String? id;
+  final String userId;
   final String serviceId;
   final String serviceTitle;
   final String customerName;
@@ -14,6 +15,7 @@ class OrderModel {
 
   OrderModel({
     this.id,
+    this.userId = '',
     required this.serviceId,
     required this.serviceTitle,
     required this.customerName,
@@ -29,6 +31,7 @@ class OrderModel {
     final data = doc.data() as Map<String, dynamic>;
     return OrderModel(
       id: doc.id,
+      userId: data['userId'] ?? '',
       serviceId: data['serviceId'] ?? '',
       serviceTitle: data['serviceTitle'] ?? '',
       customerName: data['customerName'] ?? '',
@@ -43,6 +46,7 @@ class OrderModel {
 
   Map<String, dynamic> toMap() {
     return {
+      'userId': userId,
       'serviceId': serviceId,
       'serviceTitle': serviceTitle,
       'customerName': customerName,

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../core/providers/user_provider.dart';
 import '../../models/service_model.dart';
 import '../../services/firebase_service.dart';
 import '../../widgets/service_card.dart';
+import '../explore/explore_screen.dart';
+import '../notification/notification_screen.dart';
 import '../service/service_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -56,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<UserProvider>();
     return Scaffold(
       backgroundColor: AppColors.surfaceGrey,
       body: SafeArea(
@@ -75,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Halo, Ahmad! 👋',
+                                'Halo, ${user.displayName.split(' ').first}! 👋',
                                 style: AppTextStyles.titleMedium.copyWith(
                                   color: AppColors.white.withOpacity(0.85),
                                 ),
@@ -90,31 +95,38 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
-                        Stack(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: AppColors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.notifications_outlined,
-                                  color: AppColors.white),
-                            ),
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFF97316),
-                                  shape: BoxShape.circle,
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const NotificationScreen()),
+                          ),
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: AppColors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
+                                child: const Icon(Icons.notifications_outlined,
+                                    color: AppColors.white),
                               ),
-                            )
-                          ],
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF97316),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              )
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -122,7 +134,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Search bar
                     GestureDetector(
                       onTap: () {
-                        // navigate to explore
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const ExploreScreen()),
+                        );
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(

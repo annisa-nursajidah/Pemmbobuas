@@ -1,9 +1,191 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/service_model.dart';
 import '../models/order_model.dart';
+import '../models/user_model.dart';
 
 class FirebaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // ── USERS ────────────────────────────────────────────────
+
+  /// Login: cari user by nomor HP dan password
+  Future<UserModel?> getUserByPhone(String phone, String password) async {
+    // Normalisasi nomor: hilangkan awalan 0 (input dari UI tanpa +62)
+    final normalized = phone.startsWith('0') ? phone.substring(1) : phone;
+    final snap = await _db
+        .collection('users')
+        .where('phone', isEqualTo: normalized)
+        .where('password', isEqualTo: password)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return UserModel.fromFirestore(snap.docs.first);
+  }
+
+  /// Cek apakah nomor sudah terdaftar
+  Future<bool> isPhoneRegistered(String phone) async {
+    final normalized = phone.startsWith('0') ? phone.substring(1) : phone;
+    final snap = await _db
+        .collection('users')
+        .where('phone', isEqualTo: normalized)
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
+
+  /// Daftarkan user baru ke Firestore
+  Future<UserModel> createUser({
+    required String name,
+    required String phone,
+    required String password,
+  }) async {
+    final normalized = phone.startsWith('0') ? phone.substring(1) : phone;
+    final ref = _db.collection('users').doc();
+    final data = {
+      'name': name,
+      'phone': normalized,
+      'password': password,
+      'avatarUrl': 'https://i.pravatar.cc/150?u=$normalized',
+      'memberSince': FieldValue.serverTimestamp(),
+    };
+    await ref.set(data);
+    // Re-fetch untuk dapat Timestamp yang sudah diisi server
+    final doc = await ref.get();
+    return UserModel.fromFirestore(doc);
+  }
+
+  /// Seed 1 user demo untuk testing
+  Future<void> seedDemoUser() async {
+    final existing = await _db
+        .collection('users')
+        .where('phone', isEqualTo: '81234567890')
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) return;
+
+    await _db.collection('users').add({
+      'name': 'Ahmad Santoso',
+      'phone': '81234567890',
+      'password': 'password123',
+      'avatarUrl': 'https://i.pravatar.cc/150?img=3',
+      'memberSince': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ── NOTIFICATIONS ────────────────────────────────────────
+
+  /// Stream notifikasi user
+  Stream<List<Map<String, dynamic>>> getNotificationsStream(String userId) {
+    return _db
+        .collection('notifications')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList());
+  }
+
+  /// Seed notifikasi demo untuk user
+  Future<void> seedNotifications(String userId) async {
+    final existing = await _db
+        .collection('notifications')
+        .where('userId', isEqualTo: userId)
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) return;
+
+    final batch = _db.batch();
+    final notifs = [
+      {
+        'userId': userId,
+        'title': 'Pesanan Dikonfirmasi',
+        'body': 'Pesanan Service AC Anda telah dikonfirmasi oleh Toni Raharjo',
+        'icon': 'check_circle',
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+      {
+        'userId': userId,
+        'title': 'Promo Spesial!',
+        'body': 'Diskon 20% untuk semua layanan kebersihan hari ini',
+        'icon': 'local_offer',
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+      {
+        'userId': userId,
+        'title': 'Pesanan Selesai',
+        'body': 'Pesanan Bersih-Bersih Rumah telah selesai. Berikan ulasan!',
+        'icon': 'star',
+        'isRead': true,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+    ];
+    for (final n in notifs) {
+      batch.set(_db.collection('notifications').doc(), n);
+    }
+    await batch.commit();
+  }
+
+  /// Mark notifikasi sebagai sudah dibaca
+  Future<void> markNotificationRead(String notifId) async {
+    await _db
+        .collection('notifications')
+        .doc(notifId)
+        .update({'isRead': true});
+  }
+
+  // ── CHATS ─────────────────────────────────────────────────
+
+  /// Stream percakapan user
+  Stream<List<Map<String, dynamic>>> getChatsStream(String userId) {
+    return _db
+        .collection('chats')
+        .where('userId', isEqualTo: userId)
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList());
+  }
+
+  /// Seed beberapa chat demo untuk user
+  Future<void> seedChats(String userId) async {
+    final existing = await _db
+        .collection('chats')
+        .where('userId', isEqualTo: userId)
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) return;
+
+    final batch = _db.batch();
+    final chats = [
+      {
+        'userId': userId,
+        'mitraName': 'Toni Raharjo',
+        'mitraAvatar': 'https://i.pravatar.cc/150?img=11',
+        'lastMsg': 'Baik pak, saya akan datang jam 10 pagi',
+        'unread': 1,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      {
+        'userId': userId,
+        'mitraName': 'Siti Aminah',
+        'mitraAvatar': 'https://i.pravatar.cc/150?img=21',
+        'lastMsg': 'Terima kasih sudah menggunakan jasa kami!',
+        'unread': 0,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    ];
+    for (final c in chats) {
+      batch.set(_db.collection('chats').doc(), c);
+    }
+    await batch.commit();
+  }
+
+
 
   // ── SERVICES ────────────────────────────────────────────
 
@@ -63,16 +245,17 @@ class FirebaseService {
     await _db.collection('orders').add(order.toMap());
   }
 
-  /// Stream pesanan berdasarkan nama pelanggan
-  Stream<List<OrderModel>> getOrdersStream(String customerName) {
+  /// Stream pesanan berdasarkan userId
+  Stream<List<OrderModel>> getOrdersStream(String userId) {
     return _db
         .collection('orders')
-        .where('customerName', isEqualTo: customerName)
+        .where('userId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => OrderModel.fromFirestore(doc)).toList());
   }
+
 
   // ── SEED DATA ───────────────────────────────────────────
 

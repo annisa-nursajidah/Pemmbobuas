@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../core/providers/user_provider.dart';
 import '../auth/login_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -16,6 +18,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<UserProvider>().currentUser;
     return Scaffold(
       backgroundColor: AppColors.surfaceGrey,
       body: SafeArea(
@@ -36,9 +39,13 @@ class ProfileScreen extends StatelessWidget {
                           radius: 36,
                           backgroundColor:
                               AppColors.white.withOpacity(0.3),
-                          backgroundImage: const NetworkImage(
-                            'https://i.pravatar.cc/150?img=3',
-                          ),
+                          backgroundImage: user?.avatarUrl.isNotEmpty == true
+                              ? NetworkImage(user!.avatarUrl)
+                              : null,
+                          child: user?.avatarUrl.isNotEmpty != true
+                              ? const Icon(Icons.person_rounded,
+                                  color: AppColors.white, size: 36)
+                              : null,
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -46,19 +53,19 @@ class ProfileScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Ahmad Santoso',
+                                user?.name ?? 'Pengguna',
                                 style: AppTextStyles.headlineMedium
                                     .copyWith(color: AppColors.white),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '+62 812-3456-7890',
+                                user?.formattedPhone ?? '-',
                                 style: AppTextStyles.bodySmall.copyWith(
                                     color: AppColors.white.withOpacity(0.8)),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Member sejak Mei 2024',
+                                user?.memberSinceLabel ?? 'Member',
                                 style: AppTextStyles.caption.copyWith(
                                     color: AppColors.white.withOpacity(0.65)),
                               ),
@@ -207,6 +214,8 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           TextButton(
                             onPressed: () {
+                              // Clear session lalu ke login
+                              context.read<UserProvider>().logout();
                               Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(

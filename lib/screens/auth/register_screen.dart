@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../core/providers/user_provider.dart';
+import '../../services/firebase_service.dart';
 import '../main_scaffold.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -15,8 +18,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _firebaseService = FirebaseService();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -28,10 +33,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() => _isLoading = false);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final phone = _phoneController.text.trim();
+
+      // Cek apakah nomor sudah terdaftar
+      final isRegistered = await _firebaseService.isPhoneRegistered(phone);
+      if (!mounted) return;
+
+      if (isRegistered) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              'Nomor telepon ini sudah terdaftar. Silakan masuk dengan akun Anda.';
+        });
+        return;
+      }
+
+      // Buat akun baru di Firestore
+      final user = await _firebaseService.createUser(
+        name: _nameController.text.trim(),
+        phone: phone,
+        password: _passwordController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      // Set session user
+      context.read<UserProvider>().setUser(user);
+
+      // Seed data demo untuk user baru
+      await _firebaseService.seedNotifications(user.id);
+      await _firebaseService.seedChats(user.id);
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Akun berhasil dibuat! Selamat datang!'),
@@ -41,6 +81,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
+
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) {
         Navigator.pushAndRemoveUntil(
@@ -48,6 +89,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           MaterialPageRoute(builder: (_) => const MainScaffold()),
           (route) => false,
         );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Terjadi kesalahan. Periksa koneksi internet Anda.';
+        });
       }
     }
   }
@@ -168,6 +216,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         return null;
                       },
                     ),
+
+                    // Error message
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.errorRed.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.errorRed.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline_rounded,
+                                color: AppColors.errorRed, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: AppTextStyles.bodySmall
+                                    .copyWith(color: AppColors.errorRed),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 32),
 
                     ElevatedButton(

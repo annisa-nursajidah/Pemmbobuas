@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../core/providers/user_provider.dart';
 import '../../models/service_model.dart';
 import '../../models/order_model.dart';
 import '../../services/firebase_service.dart';
@@ -22,7 +24,19 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
   final _notesController = TextEditingController();
   final FirebaseService _firebaseService = FirebaseService();
   bool _isSubmitting = false;
-  bool _isSuccess = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill nama & nomor dari data user yang login
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<UserProvider>().currentUser;
+      if (user != null) {
+        _nameController.text = user.name;
+        _phoneController.text = '0${user.phone}';
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -38,7 +52,9 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
     setState(() => _isSubmitting = true);
 
     try {
+      final userId = context.read<UserProvider>().userId;
       final order = OrderModel(
+        userId: userId,
         serviceId: widget.service.id,
         serviceTitle: widget.service.title,
         customerName: _nameController.text.trim(),
@@ -51,7 +67,6 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
       await _firebaseService.addOrder(order);
       setState(() {
         _isSubmitting = false;
-        _isSuccess = true;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

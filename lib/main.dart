@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
+import 'core/providers/user_provider.dart';
 import 'screens/splash_screen.dart';
 import 'firebase_options.dart';
 import 'services/firebase_service.dart';
@@ -10,8 +12,9 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Seed 25 data layanan ke Firestore jika belum ada
+  // Seed data layanan & user demo ke Firestore jika belum ada
   await FirebaseService().seedServices();
+  await FirebaseService().seedDemoUser();
   runApp(const SobatBeresApp());
 }
 
@@ -20,11 +23,15 @@ class SobatBeresApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Sobat Beres',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      home: const SplashScreen(),
+    return ChangeNotifierProvider(
+      create: (_) => UserProvider(),
+      child: MaterialApp(
+        title: 'Sobat Beres',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        home: const SplashScreen(),
+      ),
     );
   }
 }
+
