@@ -9,8 +9,13 @@ import '../../services/firebase_service.dart';
 
 class AddOrderScreen extends StatefulWidget {
   final ServiceModel service;
+  final ServicePackage? selectedPackage;
 
-  const AddOrderScreen({super.key, required this.service});
+  const AddOrderScreen({
+    super.key,
+    required this.service,
+    this.selectedPackage,
+  });
 
   @override
   State<AddOrderScreen> createState() => _AddOrderScreenState();
@@ -53,16 +58,19 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
 
     try {
       final userId = context.read<UserProvider>().userId;
+      final harga = widget.selectedPackage?.price ?? widget.service.price;
       final order = OrderModel(
         userId: userId,
         serviceId: widget.service.id,
-        serviceTitle: widget.service.title,
+        serviceTitle: widget.selectedPackage != null
+            ? '${widget.service.title} - ${widget.selectedPackage!.name}'
+            : widget.service.title,
         customerName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         address: _addressController.text.trim(),
         notes: _notesController.text.trim(),
         status: 'pending',
-        totalPrice: widget.service.price,
+        totalPrice: harga,
       );
       await _firebaseService.addOrder(order);
       setState(() {
@@ -286,7 +294,7 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
                           Text('Total Pembayaran',
                               style: AppTextStyles.titleMedium),
                           Text(
-                            'Rp ${_formatPrice(s.price)}',
+                            'Rp ${_formatPrice(widget.selectedPackage?.price ?? s.price)}',
                             style: AppTextStyles.titleLarge
                                 .copyWith(color: AppColors.accentBlue),
                           ),
