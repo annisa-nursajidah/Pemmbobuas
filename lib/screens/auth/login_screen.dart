@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../core/providers/user_provider.dart';
 import '../../services/firebase_service.dart';
 import '../main_scaffold.dart';
+import '../mitra/mitra_scaffold.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -60,13 +61,20 @@ class _LoginScreenState extends State<LoginScreen> {
       // Seed data demo untuk user ini
       await _firebaseService.seedNotifications(user.id);
       await _firebaseService.seedChats(user.id);
+      // Seed akun mitra demo jika belum ada
+      await _firebaseService.seedMitraUser();
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
+      // Redirect berdasarkan role
+      final destination = user.isMitra
+          ? const MitraScaffold()
+          : const MainScaffold();
+
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const MainScaffold()),
+        MaterialPageRoute(builder: (_) => destination),
       );
     } catch (e) {
       if (mounted) {

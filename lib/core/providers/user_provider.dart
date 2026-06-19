@@ -11,6 +11,8 @@ class UserProvider extends ChangeNotifier {
   String get userId => _currentUser?.id ?? '';
   String get userPhone => _currentUser?.formattedPhone ?? '';
   String get avatarUrl => _currentUser?.avatarUrl ?? '';
+  String get userRole => _currentUser?.role ?? 'pelanggan';
+  bool get isMitra => _currentUser?.isMitra ?? false;
 
   void setUser(UserModel user) {
     _currentUser = user;
@@ -22,3 +24,4 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
+

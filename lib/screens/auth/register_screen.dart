@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../core/providers/user_provider.dart';
 import '../../services/firebase_service.dart';
 import '../main_scaffold.dart';
+import '../mitra/mitra_scaffold.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -18,16 +19,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _keahlianController = TextEditingController();
+  final _cityController = TextEditingController();
   final _firebaseService = FirebaseService();
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
+  String _selectedRole = 'pelanggan'; // 'pelanggan' atau 'mitra'
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _keahlianController.dispose();
+    _cityController.dispose();
     super.dispose();
   }
 
@@ -59,6 +65,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         name: _nameController.text.trim(),
         phone: phone,
         password: _passwordController.text.trim(),
+        role: _selectedRole,
+        keahlian: _keahlianController.text.trim(),
+        city: _cityController.text.trim(),
       );
 
       if (!mounted) return;
@@ -74,7 +83,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Akun berhasil dibuat! Selamat datang!'),
+          content: Text(_selectedRole == 'mitra'
+              ? 'Akun Mitra berhasil dibuat! Selamat bergabung!'
+              : 'Akun berhasil dibuat! Selamat datang!'),
           backgroundColor: AppColors.escrowGreen,
           behavior: SnackBarBehavior.floating,
           shape:
@@ -84,9 +95,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) {
+        // Redirect berdasarkan role
+        final destination = user.isMitra
+            ? const MitraScaffold()
+            : const MainScaffold();
+
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const MainScaffold()),
+          MaterialPageRoute(builder: (_) => destination),
           (route) => false,
         );
       }
@@ -126,7 +142,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 'Daftar sekarang dan temukan jasa terbaik di sekitar Anda',
                 style: AppTextStyles.bodyMedium,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+
+              // ── PILIHAN ROLE ─────────────────────────────────
+              _buildLabel('Daftar Sebagai'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _RoleCard(
+                      icon: Icons.person_rounded,
+                      label: 'Pelanggan',
+                      subtitle: 'Cari & pesan jasa',
+                      isSelected: _selectedRole == 'pelanggan',
+                      color: AppColors.accentBlue,
+                      onTap: () => setState(() => _selectedRole = 'pelanggan'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _RoleCard(
+                      icon: Icons.handyman_rounded,
+                      label: 'Mitra',
+                      subtitle: 'Tawarkan jasamu',
+                      isSelected: _selectedRole == 'mitra',
+                      color: const Color(0xFF10B981),
+                      onTap: () => setState(() => _selectedRole = 'mitra'),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 28),
 
               Form(
                 key: _formKey,
@@ -216,10 +263,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         return null;
                       },
                     ),
+                    const SizedBox(height: 20),
+
+                    // ── Field tambahan jika Mitra ─────────────
+                    if (_selectedRole == 'mitra') ...[
+                      _buildLabel('Keahlian / Jenis Jasa'),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _keahlianController,
+                        textCapitalization: TextCapitalization.words,
+                        style: AppTextStyles.bodyLarge,
+                        decoration: const InputDecoration(
+                          hintText: 'Contoh: Service AC, Listrik, Laundry...',
+                          prefixIcon: Icon(Icons.build_outlined,
+                              color: AppColors.textHint),
+                        ),
+                        validator: (val) {
+                          if (_selectedRole == 'mitra' &&
+                              (val == null || val.trim().isEmpty)) {
+                            return 'Keahlian wajib diisi untuk Mitra';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      _buildLabel('Kota / Wilayah Kerja'),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _cityController,
+                        textCapitalization: TextCapitalization.words,
+                        style: AppTextStyles.bodyLarge,
+                        decoration: const InputDecoration(
+                          hintText: 'Contoh: Surabaya, Jakarta...',
+                          prefixIcon: Icon(Icons.location_on_outlined,
+                              color: AppColors.textHint),
+                        ),
+                        validator: (val) {
+                          if (_selectedRole == 'mitra' &&
+                              (val == null || val.trim().isEmpty)) {
+                            return 'Kota wajib diisi untuk Mitra';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                    ],
 
                     // Error message
                     if (_errorMessage != null) ...[
-                      const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -243,12 +334,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 16),
                     ],
-
-                    const SizedBox(height: 32),
 
                     ElevatedButton(
                       onPressed: _isLoading ? null : _handleRegister,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _selectedRole == 'mitra'
+                            ? const Color(0xFF10B981)
+                            : AppColors.accentBlue,
+                      ),
                       child: _isLoading
                           ? const SizedBox(
                               height: 20,
@@ -258,7 +353,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 strokeWidth: 2,
                               ),
                             )
-                          : Text('Daftar Sekarang',
+                          : Text(
+                              _selectedRole == 'mitra'
+                                  ? 'Daftar Sebagai Mitra'
+                                  : 'Daftar Sekarang',
                               style: AppTextStyles.labelLarge),
                     ),
                   ],
@@ -272,6 +370,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   style: AppTextStyles.caption,
                 ),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
@@ -281,5 +380,68 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildLabel(String text) {
     return Text(text, style: AppTextStyles.titleMedium);
+  }
+}
+
+/// Widget kartu pilihan role
+class _RoleCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final bool isSelected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _RoleCard({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.isSelected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.08) : AppColors.surfaceGrey,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? color : AppColors.divider,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: isSelected ? color : AppColors.textHint.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon,
+                  color: isSelected ? Colors.white : AppColors.textHint,
+                  size: 24),
+            ),
+            const SizedBox(height: 10),
+            Text(label,
+                style: AppTextStyles.titleMedium.copyWith(
+                    color: isSelected ? color : AppColors.textPrimary)),
+            const SizedBox(height: 4),
+            Text(subtitle,
+                style: AppTextStyles.caption.copyWith(
+                    color:
+                        isSelected ? color.withOpacity(0.7) : AppColors.textHint),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../core/providers/user_provider.dart';
 import '../../models/service_model.dart';
+import '../../services/firebase_service.dart';
+import '../chat/chat_screen.dart';
 import '../order/add_order_screen.dart';
 
 class ServiceDetailScreen extends StatefulWidget {
@@ -33,20 +37,37 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         );
   }
 
-  void _openChatWithMitra() {
-    // Buat data chat sementara untuk mitra ini
-    final chatData = {
-      'mitraName': widget.service.mitraName,
-      'mitraAvatar': widget.service.mitraAvatarUrl,
-      'lastMsg': 'Halo, saya tertarik dengan layanan ${widget.service.title}',
-      'unread': 0,
-    };
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _ChatDetailPage(chat: chatData),
-      ),
-    );
+  Future<void> _openChatWithMitra() async {
+    final userId = context.read<UserProvider>().userId;
+    final fb = FirebaseService();
+
+    // Tampil loading
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final chatId = await fb.getOrCreateChat(
+        userId: userId,
+        mitraName: widget.service.mitraName,
+        mitraAvatar: widget.service.mitraAvatarUrl,
+      );
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatDetailPage(
+            chat: {
+              'id': chatId,
+              'mitraName': widget.service.mitraName,
+              'mitraAvatar': widget.service.mitraAvatarUrl,
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Gagal membuka chat: $e'),
+            backgroundColor: AppColors.errorRed),
+      );
+    }
   }
 
   @override
@@ -216,7 +237,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                         ),
                       ),
 
-                      // ── Tombol Chat Mitra (berfungsi) ──────────────────
+                      // ── Tombol Chat Mitra ────────────────────────────
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
                         onPressed: _openChatWithMitra,
@@ -431,189 +452,3 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   }
 }
 
-// ── Halaman chat dengan mitra dari service detail ────────────────
-class _ChatDetailPage extends StatefulWidget {
-  final Map<String, dynamic> chat;
-  const _ChatDetailPage({required this.chat});
-
-  @override
-  State<_ChatDetailPage> createState() => _ChatDetailPageState();
-}
-
-class _ChatDetailPageState extends State<_ChatDetailPage> {
-  final _msgController = TextEditingController();
-  final _scrollController = ScrollController();
-
-  late final List<Map<String, dynamic>> _messages;
-
-  @override
-  void initState() {
-    super.initState();
-    _messages = [
-      {'text': widget.chat['lastMsg'] ?? 'Halo!', 'isMe': true},
-      {
-        'text':
-            'Halo! Terima kasih sudah menghubungi kami. Ada yang bisa saya bantu?',
-        'isMe': false
-      },
-    ];
-  }
-
-  @override
-  void dispose() {
-    _msgController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _sendMessage() {
-    final text = _msgController.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      _messages.add({'text': text, 'isMe': true});
-      _msgController.clear();
-    });
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.lightBlue,
-              backgroundImage:
-                  (widget.chat['mitraAvatar'] as String?)?.isNotEmpty == true
-                      ? NetworkImage(widget.chat['mitraAvatar'])
-                      : null,
-              child: (widget.chat['mitraAvatar'] as String?)?.isNotEmpty != true
-                  ? const Icon(Icons.person_rounded,
-                      color: AppColors.accentBlue, size: 16)
-                  : null,
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.chat['mitraName'] ?? 'Mitra',
-                    style: AppTextStyles.titleMedium
-                        .copyWith(color: AppColors.white)),
-                Text('Online',
-                    style: AppTextStyles.caption.copyWith(
-                        color: AppColors.white.withOpacity(0.75))),
-              ],
-            ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final isMe = msg['isMe'] as bool;
-                return Align(
-                  alignment:
-                      isMe ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.72),
-                    decoration: BoxDecoration(
-                      color: isMe
-                          ? AppColors.accentBlue
-                          : AppColors.surfaceGrey,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(16),
-                        topRight: const Radius.circular(16),
-                        bottomLeft: Radius.circular(isMe ? 16 : 4),
-                        bottomRight: Radius.circular(isMe ? 4 : 16),
-                      ),
-                    ),
-                    child: Text(
-                      msg['text'],
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: isMe ? AppColors.white : AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          // Input bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, -2),
-                )
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _msgController,
-                    style: AppTextStyles.bodyMedium,
-                    decoration: InputDecoration(
-                      hintText: 'Ketik pesan...',
-                      filled: true,
-                      fillColor: AppColors.surfaceGrey,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _sendMessage,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: const BoxDecoration(
-                      color: AppColors.accentBlue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.send_rounded,
-                        color: Colors.white, size: 20),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

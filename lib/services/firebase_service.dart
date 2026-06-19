@@ -8,6 +8,143 @@ class FirebaseService {
 
   // ── USERS ────────────────────────────────────────────────
 
+  /// Update nama & keahlian/city user di Firestore
+  Future<void> updateUserProfile(String userId, Map<String, dynamic> data) async {
+    await _db.collection('users').doc(userId).update(data);
+  }
+
+  /// Ambil stats pesanan untuk profil pelanggan
+  Future<Map<String, dynamic>> getUserOrderStats(String userId) async {
+    final snap = await _db
+        .collection('orders')
+        .where('userId', isEqualTo: userId)
+        .get();
+    final orders = snap.docs;
+    final total = orders.length;
+    final selesai = orders.where((d) => d['status'] == 'selesai').length;
+    final totalBelanja = orders
+        .where((d) => d['status'] == 'selesai')
+        .fold(0.0, (sum, d) => sum + ((d['totalPrice'] ?? 0.0) as num).toDouble());
+    return {'total': total, 'selesai': selesai, 'totalBelanja': totalBelanja};
+  }
+
+  // ── ADDRESSES ────────────────────────────────────────────
+
+  Stream<List<Map<String, dynamic>>> getAddressesStream(String userId) {
+    return _db
+        .collection('users')
+        .doc(userId)
+        .collection('addresses')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => {'id': d.id, ...d.data()})
+            .toList());
+  }
+
+  Future<void> addAddress(String userId, Map<String, dynamic> data) async {
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('addresses')
+        .add({...data, 'createdAt': FieldValue.serverTimestamp()});
+  }
+
+  Future<void> updateAddress(
+      String userId, String addressId, Map<String, dynamic> data) async {
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('addresses')
+        .doc(addressId)
+        .update(data);
+  }
+
+  Future<void> deleteAddress(String userId, String addressId) async {
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('addresses')
+        .doc(addressId)
+        .delete();
+  }
+
+  // ── REVIEWS ──────────────────────────────────────────────
+
+  /// Tambah ulasan setelah pesanan selesai
+  Future<void> addReview({
+    required String mitraName,
+    required String orderId,
+    required String userId,
+    required String customerName,
+    required double rating,
+    required String comment,
+    required String serviceTitle,
+  }) async {
+    await _db.collection('reviews').add({
+      'mitraName': mitraName,
+      'orderId': orderId,
+      'userId': userId,
+      'customerName': customerName,
+      'rating': rating,
+      'comment': comment,
+      'serviceTitle': serviceTitle,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Stream ulasan untuk mitra tertentu
+  Stream<List<Map<String, dynamic>>> getMitraReviewsStream(String mitraName) {
+    return _db
+        .collection('reviews')
+        .where('mitraName', isEqualTo: mitraName)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => {'id': d.id, ...d.data()})
+            .toList());
+  }
+
+  /// Rata-rata rating mitra
+  Future<double> getMitraAverageRating(String mitraName) async {
+    final snap = await _db
+        .collection('reviews')
+        .where('mitraName', isEqualTo: mitraName)
+        .get();
+    if (snap.docs.isEmpty) return 0.0;
+    final sum = snap.docs
+        .fold(0.0, (s, d) => s + ((d['rating'] ?? 0.0) as num).toDouble());
+    return sum / snap.docs.length;
+  }
+
+  // ── MITRA SERVICES CRUD ──────────────────────────────────
+
+  /// Tambah layanan baru oleh mitra
+  Future<void> addService(Map<String, dynamic> data) async {
+    await _db.collection('services').add({
+      ...data,
+      'mitraRating': 0.0,
+      'totalOrders': 0,
+      'isFeatured': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Update layanan yang ada
+  Future<void> updateService(String serviceId, Map<String, dynamic> data) async {
+    await _db.collection('services').doc(serviceId).update(data);
+  }
+
+  /// Stream layanan milik mitra tertentu
+  Stream<List<ServiceModel>> getMitraServicesStream(String mitraName) {
+    return _db
+        .collection('services')
+        .where('mitraName', isEqualTo: mitraName)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => ServiceModel.fromFirestore(d)).toList());
+  }
+
   /// Login: cari user by nomor HP dan password
   Future<UserModel?> getUserByPhone(String phone, String password) async {
     // Normalisasi nomor: hilangkan awalan 0 (input dari UI tanpa +62)
@@ -22,7 +159,6 @@ class FirebaseService {
     return UserModel.fromFirestore(snap.docs.first);
   }
 
-  /// Cek apakah nomor sudah terdaftar
   Future<bool> isPhoneRegistered(String phone) async {
     final normalized = phone.startsWith('0') ? phone.substring(1) : phone;
     final snap = await _db
@@ -33,11 +169,13 @@ class FirebaseService {
     return snap.docs.isNotEmpty;
   }
 
-  /// Daftarkan user baru ke Firestore
   Future<UserModel> createUser({
     required String name,
     required String phone,
     required String password,
+    String role = 'pelanggan',
+    String keahlian = '',
+    String city = '',
   }) async {
     final normalized = phone.startsWith('0') ? phone.substring(1) : phone;
     final ref = _db.collection('users').doc();
@@ -47,6 +185,9 @@ class FirebaseService {
       'password': password,
       'avatarUrl': 'https://i.pravatar.cc/150?u=$normalized',
       'memberSince': FieldValue.serverTimestamp(),
+      'role': role,
+      'keahlian': keahlian,
+      'city': city,
     };
     await ref.set(data);
     // Re-fetch untuk dapat Timestamp yang sudah diisi server
@@ -137,7 +278,6 @@ class FirebaseService {
         .update({'isRead': true});
   }
 
-  // ── CHATS ─────────────────────────────────────────────────
 
   /// Stream percakapan user
   Stream<List<Map<String, dynamic>>> getChatsStream(String userId) {
@@ -149,6 +289,81 @@ class FirebaseService {
         .map((snap) => snap.docs
             .map((doc) => {'id': doc.id, ...doc.data()})
             .toList());
+  }
+
+  /// Ambil atau buat dokumen chat antara user dan mitra
+  Future<String> getOrCreateChat({
+    required String userId,
+    required String mitraName,
+    required String mitraAvatar,
+  }) async {
+    final snap = await _db
+        .collection('chats')
+        .where('userId', isEqualTo: userId)
+        .where('mitraName', isEqualTo: mitraName)
+        .limit(1)
+        .get();
+
+    if (snap.docs.isNotEmpty) return snap.docs.first.id;
+
+    // Belum ada → buat baru
+    final ref = await _db.collection('chats').add({
+      'userId': userId,
+      'mitraName': mitraName,
+      'mitraAvatar': mitraAvatar,
+      'lastMsg': '',
+      'unread': 0,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  /// Stream pesan dalam sebuah percakapan
+  Stream<List<Map<String, dynamic>>> getMessagesStream(String chatId) {
+    return _db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList());
+  }
+
+  /// Kirim pesan dan update lastMsg pada dokumen chat
+  Future<void> sendMessage({
+    required String chatId,
+    required String senderId,
+    required String senderName,
+    required bool isFromUser, // true = pelanggan, false = mitra
+    required String text,
+  }) async {
+    final batch = _db.batch();
+
+    // Tambah pesan ke subcollection messages
+    final msgRef = _db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc();
+    batch.set(msgRef, {
+      'senderId': senderId,
+      'senderName': senderName,
+      'isFromUser': isFromUser,
+      'text': text,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // Update lastMsg + updatedAt di dokumen chat
+    final chatRef = _db.collection('chats').doc(chatId);
+    batch.update(chatRef, {
+      'lastMsg': text,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'unread': isFromUser ? 0 : FieldValue.increment(1),
+    });
+
+    await batch.commit();
   }
 
   /// Seed beberapa chat demo untuk user
@@ -245,6 +460,11 @@ class FirebaseService {
     await _db.collection('orders').add(order.toMap());
   }
 
+  /// Update status pesanan (misal: pending → proses → selesai / batal)
+  Future<void> updateOrderStatus(String orderId, String newStatus) async {
+    await _db.collection('orders').doc(orderId).update({'status': newStatus});
+  }
+
   /// Stream pesanan berdasarkan userId
   Stream<List<OrderModel>> getOrdersStream(String userId) {
     return _db
@@ -256,8 +476,403 @@ class FirebaseService {
             snap.docs.map((doc) => OrderModel.fromFirestore(doc)).toList());
   }
 
+  /// Stream pesanan masuk untuk mitra berdasarkan mitraName
+  Stream<List<OrderModel>> getMitraOrdersStream(String mitraName) {
+    return _db
+        .collection('orders')
+        .where('mitraName', isEqualTo: mitraName)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => OrderModel.fromFirestore(doc))
+            .toList());
+  }
 
-  // ── SEED DATA ───────────────────────────────────────────
+  /// Migrasi: update semua order lama yang belum punya field mitraName
+  /// dengan cara lookup serviceId → ambil mitraName dari collection services
+  Future<void> migrateOrdersMitraName() async {
+    // Ambil semua order yang mitraName-nya kosong atau belum ada
+    final ordersSnap = await _db.collection('orders').get();
+    final ordersNeedUpdate = ordersSnap.docs.where((doc) {
+      final data = doc.data();
+      final mitraName = data['mitraName'];
+      return mitraName == null || (mitraName as String).isEmpty;
+    }).toList();
+
+    if (ordersNeedUpdate.isEmpty) return;
+
+    // Ambil semua services sekali — buat map serviceId → mitraName
+    final servicesSnap = await _db.collection('services').get();
+    final serviceMap = <String, String>{};
+    for (final doc in servicesSnap.docs) {
+      final data = doc.data();
+      serviceMap[doc.id] = data['mitraName'] ?? '';
+    }
+
+    // Batch update order yang mitraName-nya kosong
+    final batch = _db.batch();
+    int updateCount = 0;
+    for (final orderDoc in ordersNeedUpdate) {
+      final serviceId = orderDoc.data()['serviceId'] as String? ?? '';
+      final mitraName = serviceMap[serviceId] ?? '';
+      if (mitraName.isNotEmpty) {
+        batch.update(orderDoc.reference, {'mitraName': mitraName});
+        updateCount++;
+      }
+    }
+    if (updateCount > 0) {
+      await batch.commit();
+    }
+  }
+
+  /// Seed semua akun mitra demo (sesuai data services)
+  Future<void> seedMitraUser() async {
+    final mitraList = [
+      {
+        'name': 'Toni Raharjo',
+        'phone': '89999888777',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=11',
+        'role': 'mitra',
+        'keahlian': 'Elektronik & AC',
+        'city': 'Surabaya',
+      },
+      {
+        'name': 'Rudi Santoso',
+        'phone': '89999888001',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=12',
+        'role': 'mitra',
+        'keahlian': 'Instalasi AC',
+        'city': 'Jakarta',
+      },
+      {
+        'name': 'Siti Aminah',
+        'phone': '89999888002',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=21',
+        'role': 'mitra',
+        'keahlian': 'Kebersihan Rumah',
+        'city': 'Bandung',
+      },
+      {
+        'name': 'Budi Pratama',
+        'phone': '89999888003',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=13',
+        'role': 'mitra',
+        'keahlian': 'Cuci Sofa & Karpet',
+        'city': 'Surabaya',
+      },
+      {
+        'name': 'Joko Susilo',
+        'phone': '89999888004',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=14',
+        'role': 'mitra',
+        'keahlian': 'Instalasi Listrik',
+        'city': 'Jakarta',
+      },
+      {
+        'name': 'Ahmad Fauzi',
+        'phone': '89999888005',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=15',
+        'role': 'mitra',
+        'keahlian': 'Pasang CCTV',
+        'city': 'Bekasi',
+      },
+      {
+        'name': 'Hendra Wijaya',
+        'phone': '89999888006',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=16',
+        'role': 'mitra',
+        'keahlian': 'Cat Dinding',
+        'city': 'Tangerang',
+      },
+      {
+        'name': 'Dewi Lestari',
+        'phone': '89999888007',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=22',
+        'role': 'mitra',
+        'keahlian': 'Pasang Wallpaper',
+        'city': 'Depok',
+      },
+      {
+        'name': 'Rahmat Hidayat',
+        'phone': '89999888008',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=17',
+        'role': 'mitra',
+        'keahlian': 'Laundry',
+        'city': 'Yogyakarta',
+      },
+      {
+        'name': 'Kevin Adriansyah',
+        'phone': '89999888009',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=18',
+        'role': 'mitra',
+        'keahlian': 'Cuci Sepatu',
+        'city': 'Surabaya',
+      },
+      {
+        'name': 'Dian Permana',
+        'phone': '89999888010',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=19',
+        'role': 'mitra',
+        'keahlian': 'Reparasi Kulkas',
+        'city': 'Jakarta',
+      },
+      {
+        'name': 'Yusuf Arifin',
+        'phone': '89999888011',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=20',
+        'role': 'mitra',
+        'keahlian': 'Reparasi Mesin Cuci',
+        'city': 'Bekasi',
+      },
+      {
+        'name': 'Surya Darma',
+        'phone': '89999888012',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=23',
+        'role': 'mitra',
+        'keahlian': 'Perbaikan Atap',
+        'city': 'Surabaya',
+      },
+      {
+        'name': 'Agus Mulyadi',
+        'phone': '89999888013',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=24',
+        'role': 'mitra',
+        'keahlian': 'Pasang Keramik & Granit',
+        'city': 'Bandung',
+      },
+      {
+        'name': 'Rizky Fadillah',
+        'phone': '89999888014',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=25',
+        'role': 'mitra',
+        'keahlian': 'Fotografi',
+        'city': 'Yogyakarta',
+      },
+      {
+        'name': 'Nina Kartika',
+        'phone': '89999888015',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=26',
+        'role': 'mitra',
+        'keahlian': 'Desain Grafis',
+        'city': 'Jakarta',
+      },
+      {
+        'name': 'Citra Dewi',
+        'phone': '89999888016',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=27',
+        'role': 'mitra',
+        'keahlian': 'Penitipan Hewan',
+        'city': 'Tangerang',
+      },
+      {
+        'name': 'Farhan Nugraha',
+        'phone': '89999888017',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=28',
+        'role': 'mitra',
+        'keahlian': 'Servis Komputer & Laptop',
+        'city': 'Semarang',
+      },
+      {
+        'name': 'Pak Slamet',
+        'phone': '89999888018',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=29',
+        'role': 'mitra',
+        'keahlian': 'Pijat Refleksi',
+        'city': 'Yogyakarta',
+      },
+      {
+        'name': 'Bu Ratna Sari',
+        'phone': '89999888019',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=30',
+        'role': 'mitra',
+        'keahlian': 'Les Privat',
+        'city': 'Surabaya',
+      },
+      {
+        'name': 'Pak Budi Angkut',
+        'phone': '89999888020',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=31',
+        'role': 'mitra',
+        'keahlian': 'Jasa Angkut & Pindah',
+        'city': 'Jakarta',
+      },
+      {
+        'name': 'Doni Wahyu',
+        'phone': '89999888021',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=32',
+        'role': 'mitra',
+        'keahlian': 'Cuci Mobil & Motor',
+        'city': 'Bandung',
+      },
+      {
+        'name': 'Bengkel Mas Eko',
+        'phone': '89999888022',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=33',
+        'role': 'mitra',
+        'keahlian': 'Ganti Oli & Tune Up',
+        'city': 'Surabaya',
+      },
+      {
+        'name': 'Bambang Listrik',
+        'phone': '89999888023',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=34',
+        'role': 'mitra',
+        'keahlian': 'Instalasi Listrik',
+        'city': 'Depok',
+      },
+      {
+        'name': 'Tim Bersih Pro',
+        'phone': '89999888024',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=35',
+        'role': 'mitra',
+        'keahlian': 'Deep Cleaning',
+        'city': 'Jakarta',
+      },
+      {
+        'name': 'Rina Desainer',
+        'phone': '89999888025',
+        'password': 'mitra123',
+        'avatarUrl': 'https://i.pravatar.cc/150?img=36',
+        'role': 'mitra',
+        'keahlian': 'Desain Interior',
+        'city': 'Jakarta',
+      },
+    ];
+
+    final batch = _db.batch();
+    int addedCount = 0;
+
+    for (final mitra in mitraList) {
+      // Cek apakah sudah ada berdasarkan nomor HP
+      final existing = await _db
+          .collection('users')
+          .where('phone', isEqualTo: mitra['phone'])
+          .limit(1)
+          .get();
+      if (existing.docs.isNotEmpty) continue;
+
+      final ref = _db.collection('users').doc();
+      batch.set(ref, {
+        ...mitra,
+        'memberSince': FieldValue.serverTimestamp(),
+      });
+      addedCount++;
+    }
+
+    if (addedCount > 0) {
+      await batch.commit();
+    }
+  }
+
+  /// Seed pesanan demo untuk mitra Toni Raharjo
+  Future<void> seedMitraOrders() async {
+    // Cek apakah sudah ada order untuk mitra ini
+    final existing = await _db
+        .collection('orders')
+        .where('mitraName', isEqualTo: 'Toni Raharjo')
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) return;
+
+    final batch = _db.batch();
+    final orders = [
+      {
+        'userId': 'demo_pelanggan',
+        'serviceId': 'demo',
+        'serviceTitle': 'Service & Cuci AC - Paket Standar',
+        'mitraName': 'Toni Raharjo',
+        'customerName': 'Budi Santoso',
+        'phone': '081234567890',
+        'address': 'Jl. Raya Darmo No. 15, Surabaya',
+        'notes': '2 unit AC 1/2 PK lantai 2',
+        'status': 'pending',
+        'totalPrice': 85000.0,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+      {
+        'userId': 'demo_pelanggan',
+        'serviceId': 'demo',
+        'serviceTitle': 'Service & Cuci AC - Paket Premium',
+        'mitraName': 'Toni Raharjo',
+        'customerName': 'Sari Dewi',
+        'phone': '085678901234',
+        'address': 'Jl. Pemuda No. 88, Surabaya',
+        'notes': 'Cek freon juga ya',
+        'status': 'selesai',
+        'totalPrice': 150000.0,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+      {
+        'userId': 'demo_pelanggan',
+        'serviceId': 'demo',
+        'serviceTitle': 'Instalasi AC Baru - Paket Standard',
+        'mitraName': 'Toni Raharjo',
+        'customerName': 'Eko Prasetyo',
+        'phone': '087890123456',
+        'address': 'Jl. Diponegoro No. 22, Surabaya',
+        'notes': 'AC 1 PK, bracket sudah tersedia',
+        'status': 'selesai',
+        'totalPrice': 250000.0,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+      {
+        'userId': 'demo_pelanggan',
+        'serviceId': 'demo',
+        'serviceTitle': 'Service & Cuci AC - Paket Standar',
+        'mitraName': 'Toni Raharjo',
+        'customerName': 'Rina Wahyu',
+        'phone': '082345678901',
+        'address': 'Perum Griya Indah Blok C5, Sidoarjo',
+        'notes': '',
+        'status': 'selesai',
+        'totalPrice': 85000.0,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+      {
+        'userId': 'demo_pelanggan',
+        'serviceId': 'demo',
+        'serviceTitle': 'Instalasi AC Baru - Paket Premium',
+        'mitraName': 'Toni Raharjo',
+        'customerName': 'Agus Hermawan',
+        'phone': '089012345678',
+        'address': 'Jl. Ahmad Yani No. 5, Surabaya',
+        'notes': 'AC 1.5 PK, tolong bawa pipa 3 meter',
+        'status': 'pending',
+        'totalPrice': 350000.0,
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+    ];
+
+    for (final order in orders) {
+      batch.set(_db.collection('orders').doc(), order);
+    }
+    await batch.commit();
+  }
 
   /// Seed 25 data layanan ke Firestore (jalankan sekali)
   Future<void> seedServices() async {

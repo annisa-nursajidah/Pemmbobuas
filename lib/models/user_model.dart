@@ -7,6 +7,9 @@ class UserModel {
   final String password;
   final String avatarUrl;
   final Timestamp? memberSince;
+  final String role; // 'pelanggan' atau 'mitra'
+  final String keahlian; // khusus mitra
+  final String city; // khusus mitra
 
   UserModel({
     required this.id,
@@ -15,7 +18,12 @@ class UserModel {
     required this.password,
     this.avatarUrl = '',
     this.memberSince,
+    this.role = 'pelanggan',
+    this.keahlian = '',
+    this.city = '',
   });
+
+  bool get isMitra => role == 'mitra';
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -26,6 +34,9 @@ class UserModel {
       password: data['password'] ?? '',
       avatarUrl: data['avatarUrl'] ?? '',
       memberSince: data['memberSince'] as Timestamp?,
+      role: data['role'] ?? 'pelanggan',
+      keahlian: data['keahlian'] ?? '',
+      city: data['city'] ?? '',
     );
   }
 
@@ -36,6 +47,9 @@ class UserModel {
       'password': password,
       'avatarUrl': avatarUrl,
       'memberSince': memberSince ?? FieldValue.serverTimestamp(),
+      'role': role,
+      'keahlian': keahlian,
+      'city': city,
     };
   }
 

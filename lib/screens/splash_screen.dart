@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_colors.dart';
 import '../core/constants/app_text_styles.dart';
+import '../services/firebase_service.dart';
 import 'auth/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -28,14 +29,28 @@ class _SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
     _controller.forward();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
-      }
-    });
+    _initAndNavigate();
+  }
+
+  Future<void> _initAndNavigate() async {
+    // Seed semua data demo (aman karena ada pengecekan 'sudah ada' di dalamnya)
+    final service = FirebaseService();
+    await Future.wait([
+      service.seedDemoUser(),
+      service.seedMitraUser(),
+      service.seedServices(),
+    ]);
+
+    // Seed pesanan demo mitra + migrasi order lama
+    await service.migrateOrdersMitraName();
+
+    await Future.delayed(const Duration(seconds: 3));
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
   }
 
   @override

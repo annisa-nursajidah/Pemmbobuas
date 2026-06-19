@@ -5,6 +5,7 @@ class OrderModel {
   final String userId;
   final String serviceId;
   final String serviceTitle;
+  final String mitraName; // nama mitra penyedia jasa
   final String customerName;
   final String phone;
   final String address;
@@ -18,6 +19,7 @@ class OrderModel {
     this.userId = '',
     required this.serviceId,
     required this.serviceTitle,
+    this.mitraName = '',
     required this.customerName,
     required this.phone,
     required this.address,
@@ -34,6 +36,7 @@ class OrderModel {
       userId: data['userId'] ?? '',
       serviceId: data['serviceId'] ?? '',
       serviceTitle: data['serviceTitle'] ?? '',
+      mitraName: data['mitraName'] ?? '',
       customerName: data['customerName'] ?? '',
       phone: data['phone'] ?? '',
       address: data['address'] ?? '',
@@ -49,6 +52,7 @@ class OrderModel {
       'userId': userId,
       'serviceId': serviceId,
       'serviceTitle': serviceTitle,
+      'mitraName': mitraName,
       'customerName': customerName,
       'phone': phone,
       'address': address,
@@ -59,3 +63,4 @@ class OrderModel {
     };
   }
 }
+

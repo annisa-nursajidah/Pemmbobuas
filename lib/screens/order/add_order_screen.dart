@@ -65,6 +65,7 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
         serviceTitle: widget.selectedPackage != null
             ? '${widget.service.title} - ${widget.selectedPackage!.name}'
             : widget.service.title,
+        mitraName: widget.service.mitraName, // ← simpan nama mitra
         customerName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         address: _addressController.text.trim(),
